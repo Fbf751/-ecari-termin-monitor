@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>eCARI Termin Monitor</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+<header>
+  <div class="car">🚗</div>
+  <h1>eCARI Monitor</h1>
+  <p>Freie Prüfungstermine finden.<br><strong>Keine automatische Buchung.</strong></p>
+</header>
+<main>
+<form id="monitor-form">
+<section><h2>Zugang</h2>
+<label>Halter-Nummer
+<input type="text" name="halter_nummer" inputmode="numeric" autocomplete="off" required>
+</label>
+<label>Geburtsdatum
+<input type="text" name="geburtsdatum" placeholder="TT.MM.JJJJ" autocomplete="off" required>
+</label>
+</section>
+
+<section><h2>Termine</h2>
+<label>Von<input type="date" name="date_from"></label>
+<label>Bis<input type="date" name="date_to"></label>
+<label>Prüfungsort<select name="location">
+<option value="">Alle Orte</option>
+<option>Zürich</option><option>Winterthur</option><option>Bassersdorf</option>
+<option>Bülach</option><option>Dübendorf</option><option>Regensdorf</option><option>Hinwil</option>
+</select></label>
+</section>
+
+<section><h2>Monitor</h2>
+<label>Laufzeit<select name="duration_minutes">
+<option value="30">30 Minuten</option>
+<option value="60">1 Stunde</option>
+<option value="120" selected>2 Stunden</option>
+<option value="360">6 Stunden</option>
+<option value="1440">24 Stunden</option>
+</select></label>
+<label>Prüfintervall<select name="interval_minutes">
+<option value="5">5 Minuten</option>
+<option value="10">10 Minuten</option>
+<option value="12" selected>12 Minuten</option>
+<option value="15">15 Minuten</option>
+</select></label>
+</section>
+
+<section><h2>Telegram</h2>
+<label>Bot Token<input type="password" name="telegram_token" autocomplete="off"></label>
+<label>Chat-ID<input type="text" name="telegram_chat_id" autocomplete="off"></label>
+<small>Im aktuellen Testmodus optional.</small>
+</section>
+
+<div class="notice">🔒 Testversion: Zugangsdaten werden nicht in GitHub-Dateien gespeichert.</div>
+<button type="submit" id="start-button">Monitor starten</button>
+</form>
+
+<div id="result" class="result hidden"></div>
+<div id="monitor-status" class="status hidden">
+  <div class="status-icon">🟢</div>
+  <h2>Monitor läuft</h2>
+  <p id="status-text">Verbindung wird hergestellt...</p>
+  <button id="stop-button" class="secondary">Monitor stoppen</button>
+</div>
+</main>
+<footer>eCARI Monitor · Nur Termin-Suche</footer>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
