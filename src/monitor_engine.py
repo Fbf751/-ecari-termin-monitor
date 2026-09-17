@@ -34,9 +34,30 @@ class MonitorEngine:
                         wait_until="commit",
                         timeout=60000,
                     )
+
                     print("eCARI erreichbar:", page.url)
+                    print("Seitentitel:", page.title())
+
+                    print("INPUT-FELDER:")
+
+                    for i in range(page.locator("input").count()):
+                        element = page.locator("input").nth(i)
+
+                        print(
+                            "INPUT",
+                            i,
+                            "name=", element.get_attribute("name"),
+                            "type=", element.get_attribute("type"),
+                            "placeholder=", element.get_attribute("placeholder"),
+                        )
+
                 except Exception as e:
-                    print("eCARI konnte aus GitHub Actions nicht geladen werden:", e)
+                    print(
+                        "eCARI konnte aus GitHub Actions "
+                        "nicht geladen werden:",
+                        e,
+                    )
+
                 finally:
                     browser.close()
 
