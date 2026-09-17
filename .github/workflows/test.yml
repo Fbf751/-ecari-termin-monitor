@@ -20,5 +20,8 @@ jobs:
       - name: Abhängigkeiten installieren
         run: pip install -r requirements.txt
 
+      - name: Playwright Browser installieren
+        run: python -m playwright install --with-deps chromium
+
       - name: Testmonitor ausführen
         run: python -m src.test_monitor
