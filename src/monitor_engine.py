@@ -23,6 +23,21 @@ class MonitorEngine:
         self.job.checks += 1
         self.job.last_check=datetime.utcnow()
         self.job.status="checking"
+        with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+
+    page.goto(
+        "https://portal.stva.zh.ch/"
+        "ecari-dispoweb/ui/app/init/"
+        "#/conduite/prive/login",
+        wait_until="domcontentloaded",
+        timeout=30000,
+    )
+
+    print("eCARI erreichbar:", page.url)
+
+    browser.close()
 
         appointments=self.get_test_appointments()
         new=[]
