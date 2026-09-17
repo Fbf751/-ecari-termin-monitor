@@ -21,8 +21,6 @@ class MonitorEngine:
         self.job.last_check = datetime.utcnow()
         self.job.status = "checking"
 
-        # eCARI-Test: Fehler beim Aufruf dürfen den Testlauf
-        # vorerst nicht abbrechen.
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -35,28 +33,42 @@ class MonitorEngine:
                         timeout=60000,
                     )
 
-                    print("eCARI erreichbar:", page.url)
-                    print("Seitentitel:", page.title())
+                    print("=== ECARI TESTMONITOR ===")
+                    print("URL:", page.url)
+                    print("TITLE:", page.title())
+                    print("=== INPUT-FELDER ===")
 
-                    print("INPUT-FELDER:")
+                    inputs = page.locator("input")
+                    print("ANZAHL INPUTS:", inputs.count())
 
-                    for i in range(page.locator("input").count()):
-                        element = page.locator("input").nth(i)
+                    for i in range(inputs.count()):
+                        element = inputs.nth(i)
 
                         print(
-                            "INPUT",
-                            i,
-                            "name=", element.get_attribute("name"),
-                            "type=", element.get_attribute("type"),
-                            "placeholder=", element.get_attribute("placeholder"),
+                            f"INPUT {i}: "
+                            f"name={element.get_attribute('name')} | "
+                            f"type={element.get_attribute('type')} | "
+                            f"placeholder={element.get_attribute('placeholder')}"
                         )
 
+                    print("=== BUTTONS ===")
+
+                    buttons = page.locator("button")
+                    print("ANZAHL BUTTONS:", buttons.count())
+
+                    for i in range(buttons.count()):
+                        element = buttons.nth(i)
+
+                        print(
+                            f"BUTTON {i}: "
+                            f"text={element.inner_text()} | "
+                            f"type={element.get_attribute('type')}"
+                        )
+
+                    print("=== ENDE ECARI TEST ===")
+
                 except Exception as e:
-                    print(
-                        "eCARI konnte aus GitHub Actions "
-                        "nicht geladen werden:",
-                        e,
-                    )
+                    print("eCARI konnte nicht vollständig geladen werden:", e)
 
                 finally:
                     browser.close()
@@ -64,7 +76,6 @@ class MonitorEngine:
         except Exception as e:
             print("Playwright-Test fehlgeschlagen:", e)
 
-        # Test-Termine
         appointments = self.get_test_appointments()
 
         new = []
