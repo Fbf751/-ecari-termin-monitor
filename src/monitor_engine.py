@@ -22,61 +22,12 @@ class MonitorEngine:
         self.job.status = "checking"
 
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-
-                try:
-                    page.goto(
-                        ECARI_URL,
-                        wait_until="commit",
-                        timeout=60000,
-                    )
-
-                    print("=== ECARI TESTMONITOR ===")
-                    print("URL:", page.url)
-                    print("TITLE:", page.title())
-                    print("=== INPUT-FELDER ===")
-
-                    inputs = page.locator("input")
-                    print("ANZAHL INPUTS:", inputs.count())
-
-                    for i in range(inputs.count()):
-                        element = inputs.nth(i)
-
-                        print(
-                            f"INPUT {i}: "
-                            f"name={element.get_attribute('name')} | "
-                            f"type={element.get_attribute('type')} | "
-                            f"placeholder={element.get_attribute('placeholder')}"
-                        )
-
-                    print("=== BUTTONS ===")
-
-                    buttons = page.locator("button")
-                    print("ANZAHL BUTTONS:", buttons.count())
-
-                    for i in range(buttons.count()):
-                        element = buttons.nth(i)
-
-                        print(
-                            f"BUTTON {i}: "
-                            f"text={element.inner_text()} | "
-                            f"type={element.get_attribute('type')}"
-                        )
-
-                    print("=== ENDE ECARI TEST ===")
-
-                except Exception as e:
-                    print("eCARI konnte nicht vollständig geladen werden:", e)
-
-                finally:
-                    browser.close()
-
+            appointments = self.check_ecari()
         except Exception as e:
-            print("Playwright-Test fehlgeschlagen:", e)
-
-        appointments = self.get_test_appointments()
+            print("eCARI-Abfrage fehlgeschlagen:", e)
+            self.job.last_error = "eCARI-Abfrage fehlgeschlagen"
+            self.job.status = "waiting"
+            return []
 
         new = []
 
@@ -94,6 +45,36 @@ class MonitorEngine:
         self.job.status = "waiting"
 
         return new
+
+    def check_ecari(self):
+        c = self.job.config
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            try:
+                page.goto(
+                    ECARI_URL,
+                    wait_until="commit",
+                    timeout=60000,
+                )
+
+                print("=== eCARI ===")
+                print("URL:", page.url)
+                print("TITLE:", page.title())
+
+                # Sichtbarer Text der Seite auslesen.
+                text = page.locator("body").inner_text(timeout=10000)
+
+                print("=== SEITENTEXT START ===")
+                print(text[:10000])
+                print("=== SEITENTEXT ENDE ===")
+
+            finally:
+                browser.close()
+
+        return []
 
     def matches_filters(self, a):
         c = self.job.config
