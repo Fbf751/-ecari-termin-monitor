@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from playwright.sync_api import sync_playwright
 
 @dataclass(frozen=True)
 class Appointment:
