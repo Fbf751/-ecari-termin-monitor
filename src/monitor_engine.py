@@ -21,23 +21,29 @@ class MonitorEngine:
         self.job.last_check = datetime.utcnow()
         self.job.status = "checking"
 
-        # Test: eCARI mit Playwright öffnen
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+        # eCARI-Test: Fehler beim Aufruf dürfen den Testlauf
+        # vorerst nicht abbrechen.
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
 
-            page.goto(
-                ECARI_URL,
-                wait_until="commit",
-                timeout=60000,
-            )
+                try:
+                    page.goto(
+                        ECARI_URL,
+                        wait_until="commit",
+                        timeout=60000,
+                    )
+                    print("eCARI erreichbar:", page.url)
+                except Exception as e:
+                    print("eCARI konnte aus GitHub Actions nicht geladen werden:", e)
+                finally:
+                    browser.close()
 
-            print("eCARI erreichbar:", page.url)
+        except Exception as e:
+            print("Playwright-Test fehlgeschlagen:", e)
 
-            browser.close()
-
-        # Bis die echte Terminsuche eingebaut ist,
-        # verwenden wir weiterhin die Test-Termine.
+        # Test-Termine
         appointments = self.get_test_appointments()
 
         new = []
