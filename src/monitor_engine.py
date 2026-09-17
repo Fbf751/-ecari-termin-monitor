@@ -28,8 +28,8 @@ class MonitorEngine:
 
             page.goto(
                 ECARI_URL,
-                wait_until="domcontentloaded",
-                timeout=30000,
+                wait_until="commit",
+                timeout=60000,
             )
 
             print("eCARI erreichbar:", page.url)
