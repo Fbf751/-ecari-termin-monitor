@@ -36,6 +36,15 @@ class EcariNavigationError(RuntimeError):
     """
 
 
+class AlreadyBookedError(EcariNavigationError):
+    """Raised when the category row is missing because you already have a
+    booked/pending appointment for it (eCARI only lets you register for a
+    category once - it drops from "Anmeldung zur Prüfung" once you have an
+    entry for it under "Bestehende Termine"). Not a bug - monitor.py treats
+    this as "nothing to do" rather than a crash.
+    """
+
+
 def _debug_shot(page: Page, label: str) -> Path | None:
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.utcnow().strftime("%H%M%S")
@@ -82,18 +91,32 @@ def open_booking_flow(page: Page, category: str) -> None:
     """
     row_label = CATEGORY_ROW_LABELS.get(category, category)
 
-    category_cell = page.get_by_text(row_label, exact=True)
-    if category_cell.count() == 0:
-        _debug_shot(page, "03_category_row_not_found")
-        raise EcariNavigationError(f"Kategorie-Zeile '{row_label}' wurde nicht gefunden.")
+    # "B"/"A" can also appear in the "Bestehende Termine" table (e.g. once
+    # you already have a booking for that category, it's gone from the
+    # "Anmeldung zur Prüfung" table above and only that other match remains)
+    # - so scan every match for the one that actually has an "Auswählen"
+    # link, instead of assuming the first match is the registration row.
+    category_cells = page.get_by_text(row_label, exact=True)
+    select_link = None
+    for i in range(category_cells.count()):
+        row = category_cells.nth(i).locator("xpath=ancestor::tr[1]")
+        candidate = row.get_by_text("Auswählen", exact=True)
+        if candidate.count() > 0:
+            select_link = candidate.first
+            break
 
-    row = category_cell.first.locator("xpath=ancestor::tr[1]")
-    select_link = row.get_by_text("Auswählen", exact=True)
-    if select_link.count() == 0:
+    if select_link is None:
         _debug_shot(page, "03_select_link_not_found")
-        raise EcariNavigationError("'Auswählen'-Link in der Kategorie-Zeile wurde nicht gefunden.")
+        if page.get_by_text("Bestehende Termine", exact=False).count() > 0:
+            raise AlreadyBookedError(
+                f"Kategorie '{row_label}' hat bereits einen bestehenden Termin - "
+                "keine neue Anmeldung möglich."
+            )
+        raise EcariNavigationError(
+            f"Kein 'Auswählen'-Link für Kategorie '{row_label}' gefunden."
+        )
 
-    select_link.first.click()
+    select_link.click()
     page.wait_for_timeout(3000)
     _debug_shot(page, "04_booking_flow_opened")
 
@@ -198,6 +221,9 @@ def check_appointments(halter_nummer: str, geburtsdatum: str, category: str) -> 
 
             return {"slots": [], "screenshot": None}
 
+        except AlreadyBookedError as e:
+            print(f"Hinweis: {e}")
+            return {"slots": [], "screenshot": None}
         except Exception:
             _debug_shot(page, "zz_fatal_error")
             raise
