@@ -1,8 +1,12 @@
 name: eCARI Monitor
 
+# No schedule trigger: portal.stva.zh.ch blocks traffic from GitHub Actions'
+# datacenter IPs (confirmed via two live test runs, both net::ERR_TIMED_OUT
+# at the exact same spot - the same page loads instantly from a normal
+# connection). The bot now runs locally instead, via Windows Task Scheduler
+# (see README.md "Lokal laufen lassen"). Kept as workflow_dispatch only, in
+# case a future free-tier host turns out not to be blocked.
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:

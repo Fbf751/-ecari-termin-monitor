@@ -11,9 +11,14 @@ ECARI_URL = (
 
 LOCATION_NAME = "Albisgütli"
 
-CATEGORY_LABELS = {
-    "B": ["Kategorie B", "PW", "B "],
-    "A1": ["Kategorie A1", "Motorrad A1", "A1"],
+# The post-login page lists rows like "Fahrprüfung | B | Auswählen" -
+# confirmed against a real session. The portal only lists the broad "A"
+# category, not "A1" specifically; the A1 sub-selection (if any) presumably
+# happens on the page that opens after clicking "Auswählen" for "A" - this
+# still needs to be confirmed against a real run with category A1 selected.
+CATEGORY_ROW_LABELS = {
+    "B": "B",
+    "A1": "A",
 }
 
 MAX_WEEKS_TO_CHECK = 20
@@ -31,13 +36,16 @@ class EcariNavigationError(RuntimeError):
     """
 
 
-def _debug_shot(page: Page, label: str) -> None:
+def _debug_shot(page: Page, label: str) -> Path | None:
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.utcnow().strftime("%H%M%S")
+    path = DEBUG_DIR / f"{ts}_{label}.png"
     try:
-        page.screenshot(path=str(DEBUG_DIR / f"{ts}_{label}.png"), full_page=True)
+        page.screenshot(path=str(path), full_page=True)
     except Exception as e:
         print(f"Screenshot fehlgeschlagen ({label}):", e)
+        return None
+    return path
 
 
 def login(page: Page, halter_nummer: str, geburtsdatum: str) -> None:
@@ -52,7 +60,9 @@ def login(page: Page, halter_nummer: str, geburtsdatum: str) -> None:
     inputs.nth(0).fill(halter_nummer)
     inputs.nth(1).fill(geburtsdatum)
 
-    login_button = page.get_by_role("button", name="Anmelden", exact=True)
+    login_button = page.get_by_role("button", name="Login", exact=True)
+    if login_button.count() == 0:
+        login_button = page.get_by_role("button", name="Anmelden", exact=True)
     if login_button.count() == 0:
         login_button = page.get_by_role("button", name="Weiter", exact=True)
     if login_button.count() == 0:
@@ -64,52 +74,40 @@ def login(page: Page, halter_nummer: str, geburtsdatum: str) -> None:
 
 
 def open_booking_flow(page: Page, category: str) -> None:
-    """Navigate from the post-login dashboard into the appointment booking
-    flow for the given exam category ("B" or "A1"). UNVERIFIED against a
-    real session - see the module docstring / EcariNavigationError.
+    """Click "Auswählen" on the post-login table row matching the given
+    exam category ("B" or "A1" - "A1" maps to the row labelled just "A",
+    see CATEGORY_ROW_LABELS). Confirmed against a real session: this lands
+    directly on the "Neuer Termin" week view, with a "Prüfungsort" <select>
+    that already defaults to Albisgütli.
     """
-    candidates = [
-        "Neue Anmeldung", "Termin buchen", "Prüfung buchen",
-        "Führerprüfung", "Praktische Prüfung", "Neuer Termin",
-    ]
+    row_label = CATEGORY_ROW_LABELS.get(category, category)
 
-    for text in candidates:
-        locator = page.get_by_text(text, exact=False)
-        if locator.count() > 0:
-            locator.first.click()
-            break
-    else:
-        _debug_shot(page, "03_booking_entry_not_found")
-        raise EcariNavigationError(
-            "Einstieg in die Terminbuchung wurde nicht gefunden."
-        )
+    category_cell = page.get_by_text(row_label, exact=True)
+    if category_cell.count() == 0:
+        _debug_shot(page, "03_category_row_not_found")
+        raise EcariNavigationError(f"Kategorie-Zeile '{row_label}' wurde nicht gefunden.")
 
+    row = category_cell.first.locator("xpath=ancestor::tr[1]")
+    select_link = row.get_by_text("Auswählen", exact=True)
+    if select_link.count() == 0:
+        _debug_shot(page, "03_select_link_not_found")
+        raise EcariNavigationError("'Auswählen'-Link in der Kategorie-Zeile wurde nicht gefunden.")
+
+    select_link.first.click()
     page.wait_for_timeout(3000)
     _debug_shot(page, "04_booking_flow_opened")
 
-    for label in CATEGORY_LABELS.get(category, [category]):
-        locator = page.get_by_text(label, exact=False)
-        if locator.count() > 0:
-            locator.first.click()
-            break
+    location_select = page.locator("select")
+    if location_select.count() > 0:
+        try:
+            location_select.first.select_option(label=LOCATION_NAME)
+            page.wait_for_timeout(1500)
+        except Exception as e:
+            print(f"Hinweis: Standort-Auswahl '{LOCATION_NAME}' fehlgeschlagen ({e}) - evtl. bereits vorausgewählt.")
     else:
-        _debug_shot(page, "05_category_not_found")
-        raise EcariNavigationError(f"Prüfungskategorie '{category}' wurde nicht gefunden.")
+        print("Hinweis: Kein <select> für den Prüfungsort gefunden - evtl. hat sich das Seitenlayout geändert.")
 
-    page.wait_for_timeout(2000)
-    _debug_shot(page, "06_category_selected")
-
-    location_locator = page.get_by_text(LOCATION_NAME, exact=False)
-    if location_locator.count() > 0:
-        location_locator.first.click()
-        page.wait_for_timeout(2000)
-        _debug_shot(page, "07_location_selected")
-    else:
-        print(
-            f"Hinweis: Standort '{LOCATION_NAME}' war nicht als klickbares "
-            "Element sichtbar - evtl. bereits vorausgewählt oder als reiner "
-            "Filter statt als Auswahl-Element umgesetzt."
-        )
+    _debug_shot(page, "05_location_confirmed")
 
 
 NEXT_WEEK_LABELS = ["Nächste Woche", "Weiter", "Nächster Termin", ">", "›", "weiter"]
@@ -126,42 +124,59 @@ def go_to_next_week(page: Page) -> bool:
     return False
 
 
+NO_SLOTS_TEXT = "Keine Termine frei"
+
+
 def read_available_slots(page: Page, category: str) -> list[dict]:
-    """Best-effort extraction of visible appointment slots on the current
-    week view. UNVERIFIED - the real markup for a free vs. taken slot is
-    unknown, so this looks for a time (HH:MM) whose surrounding row/card
-    also mentions Albisgütli, and will likely need tuning once the real
-    layout is visible in the debug screenshots.
+    """Extract appointment slots from the current week view. Confirmed
+    against a real session: each weekday column has a "DD.MM.YYYY" date
+    header, and shows "Keine Termine frei" when empty. What a column looks
+    like when a slot IS available is still unconfirmed (this account had no
+    free slots during calibration) - this treats any column that does NOT
+    say "Keine Termine frei" as a hit, and reports whatever text/times are
+    in it. If real slots turn out to look different than expected, the
+    Telegram message's "raw" text will still show what was actually there.
     """
     slots = []
 
-    time_pattern = page.locator("text=/\\b\\d{1,2}:\\d{2}\\b/")
+    date_headers = page.locator("text=/\\b\\d{2}\\.\\d{2}\\.\\d{4}\\b/")
 
-    for i in range(time_pattern.count()):
-        element = time_pattern.nth(i)
-        text = element.inner_text().strip()
+    for i in range(date_headers.count()):
+        date_el = date_headers.nth(i)
+        date_text = date_el.inner_text().strip()
 
         try:
-            container_text = element.locator(
-                "xpath=ancestor::*[self::tr or self::li or self::div][1]"
-            ).inner_text()
+            column = date_el.locator("xpath=ancestor::*[self::div or self::td or self::li][1]")
+            column_text = column.inner_text()
         except Exception:
-            container_text = text
+            column_text = date_text
 
-        if LOCATION_NAME.lower() not in container_text.lower():
+        if "Termine verfügbar" in column_text:
+            # The "Termine verfügbar bis: DD.MM.YYYY" cutoff line also
+            # matches the date pattern - it's not a weekday column.
             continue
 
+        if NO_SLOTS_TEXT in column_text:
+            continue
+
+        times = column.locator("text=/\\b\\d{1,2}:\\d{2}\\b/")
+        time_texts = [times.nth(j).inner_text().strip() for j in range(times.count())]
+
         slots.append({
-            "time": text,
-            "date": "unbekannt",
+            "time": ", ".join(time_texts) if time_texts else "siehe raw",
+            "date": date_text,
             "category": category,
-            "raw": container_text[:200],
+            "raw": column_text[:300],
         })
 
     return slots
 
 
-def check_appointments(halter_nummer: str, geburtsdatum: str, category: str) -> list[dict]:
+def check_appointments(halter_nummer: str, geburtsdatum: str, category: str) -> dict:
+    """Returns {"slots": [...], "screenshot": Path | None} - the screenshot
+    is the exact week view the slots were read from, for attaching to the
+    Telegram notification as visual proof.
+    """
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
@@ -171,17 +186,17 @@ def check_appointments(halter_nummer: str, geburtsdatum: str, category: str) -> 
             open_booking_flow(page, category)
 
             for week in range(MAX_WEEKS_TO_CHECK):
-                _debug_shot(page, f"week_{week:02d}")
+                shot_path = _debug_shot(page, f"week_{week:02d}")
                 slots = read_available_slots(page, category)
 
                 if slots:
-                    return slots
+                    return {"slots": slots, "screenshot": shot_path}
 
                 if not go_to_next_week(page):
                     print(f"Keine 'nächste Woche'-Navigation mehr nach Woche {week}, breche ab.")
                     break
 
-            return []
+            return {"slots": [], "screenshot": None}
 
         except Exception:
             _debug_shot(page, "zz_fatal_error")

@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import requests
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+TELEGRAM_API_PHOTO = "https://api.telegram.org/bot{token}/sendPhoto"
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> bool:
@@ -21,6 +24,30 @@ def send_telegram(token: str, chat_id: str, text: str) -> bool:
 
     if not response.ok:
         print("Telegram-Versand fehlgeschlagen:", response.status_code, response.text)
+        return False
+
+    return True
+
+
+def send_telegram_photo(token: str, chat_id: str, photo_path: Path, caption: str) -> bool:
+    if not token or not chat_id:
+        print("Telegram nicht konfiguriert, überspringe Benachrichtigung.")
+        return False
+
+    with open(photo_path, "rb") as f:
+        response = requests.post(
+            TELEGRAM_API_PHOTO.format(token=token),
+            data={
+                "chat_id": chat_id,
+                "caption": caption[:1024],
+                "parse_mode": "HTML",
+            },
+            files={"photo": f},
+            timeout=30,
+        )
+
+    if not response.ok:
+        print("Telegram-Foto-Versand fehlgeschlagen:", response.status_code, response.text)
         return False
 
     return True
